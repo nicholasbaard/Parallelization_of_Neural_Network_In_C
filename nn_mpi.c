@@ -11,6 +11,20 @@ def sigmoid(double x){
     return 1/(1 + exp(-x));
 }
 
+def forward_propagate(double *input, double *weight1, double *weight2){
+    for(int i = 0; i < hidden_nodesr; i++){
+        for(int j = 0; j < input_nodes; j++){
+            act += input[j]*weight[j][i];
+        }
+        layer1[i] = sigmoid(act);
+    }
+    for(int i = 0; i < output_nodes; i++){
+        for(int j = 0; j < hidden_nodes; j++){
+            act += input[j]*weight[j][i];
+        }
+        layer2[i] = sigmoid(act);
+    }
+}
 
 int main(int argc, char *argv[]){
   float arr[ROW*COL];
