@@ -12,15 +12,15 @@ def sigmoid(double x){
 }
 
 def forward_propagate(double *input, double *weight1, double *weight2){
-    for(int i = 0; i < hidden_nodesr; i++){
+    for(int i = 0; i < hidden_nodes; i++){
         for(int j = 0; j < input_nodes; j++){
-            act += input[j]*weight[j][i];
+            act += input[j]*weight[i][j];
         }
         layer1[i] = sigmoid(act);
     }
     for(int i = 0; i < output_nodes; i++){
         for(int j = 0; j < hidden_nodes; j++){
-            act += input[j]*weight[j][i];
+            act += input[j]*weight[i][j];
         }
         layer2[i] = sigmoid(act);
     }
