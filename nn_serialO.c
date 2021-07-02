@@ -234,8 +234,8 @@ void main(int argc, char *argv[]){
     int count_final=0;
 
     for(int i = 0; i < TRAIN_ROW; i++){
-        //printf("predicted %f\n", output[i]);
-        //printf("actual %f\n", train_y_arr[i]);
+        printf("predicted %f\n", output[i]);
+        printf("actual %f\n", train_y_arr[i]);
         if(output[i] == train_y_arr[i]){
             count_final +=1;
         }
