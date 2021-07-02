@@ -141,9 +141,7 @@ float train_nn(float *input_matrix,
     return 0;
 }
 
-void main(int argc, char *argv[]){
-  //IMPORT TRAINING DATA
-  float train_arr[TRAIN_ROW*COL];
+void import_data(float* train_arr, float* train_y_arr, float* test_arr , float* test_y_arr){
   FILE* str = fopen("train_data.csv", "r");
 
   char line[1024];
@@ -160,9 +158,8 @@ void main(int argc, char *argv[]){
     }
     free(tmp);
   }
-  // reshape arr into matrix
   //IMPORT TRAINING LABELS
-  float train_y_arr[TRAIN_ROW*1];
+
   FILE* str_y = fopen("train_y.csv", "r");
 
   char line_y[1024];
@@ -181,7 +178,7 @@ void main(int argc, char *argv[]){
   }
 
   //IMPORT TESTING DATA
-  float test_arr[TEST_ROW*COL];
+
   FILE* str_t = fopen("test_data.csv", "r");
 
   char line_t[1024];
@@ -200,7 +197,7 @@ void main(int argc, char *argv[]){
   }
 
   //IMPORT TEST LABELS
-  float test_y_arr[TEST_ROW*1];
+
   FILE* str_ty = fopen("test_y.csv", "r");
 
   char line_ty[1024];
@@ -218,7 +215,23 @@ void main(int argc, char *argv[]){
     free(tmp);
   }
 
+}
 
+void main(int argc, char *argv[]){
+  //IMPORT TRAINING DATA
+  float train_arr = new float*[TRAIN_ROW*COL];
+  float train_y_arr = new float*[TRAIN_ROW*1];
+  float test_arr = new float[TEST_ROW*COL];
+  float test_y_arr[TEST_ROW*1];
+
+  for(int i=0; i < TRAIN_ROW; i++){
+    for(int c=0; c < COL; c++){
+        printf("%f ", train_arr[i*COL + c]);
+    }
+    printf("\n");
+  }
+
+  import_data(train_arr, train_y_arr, test_arr, test_y_arr);
   // NEURAL NETWORK
   // define weights and biases
   float weight_layer1[HIDDEN_NODES*INPUT_NODES];
@@ -249,13 +262,7 @@ void main(int argc, char *argv[]){
 
   int epoch = 1000;
 
-  clock_t t;
-  t = clock();
   float a = train_nn(train_arr, train_y_arr, weight_layer1, weight_layer2, layer1, layer2, epoch);
-  t = clock() - t;
-  double time_serial = ((double)t)/CLOCKS_PER_SEC;
-  printf("\nThe runtime for training a serial implementation of a NN, using %d epochs is: %fs\n", epoch, time_serial);
-
 
   float b = 0.0;
 
