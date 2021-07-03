@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <mpi.h>
 
 #define ROW 773
 #define COL 26
@@ -13,7 +14,7 @@
 #define HIDDEN_NODES 10
 #define OUTPUT_NODES 1
 
-#define ALPHA 0.1
+#define ALPHA 0.05
 
 // Activation Functions
 float sigmoid(float x){
@@ -159,17 +160,37 @@ void import_data(float* train_arr, float* train_y_arr, float* test_arr , float* 
 
 void main(int argc, char *argv[]){
 
-  float train_arr[TRAIN_ROW*COL];
-  float train_y_arr[TRAIN_ROW*1];
-  float test_arr[TEST_ROW*COL];
-  float test_y_arr[TEST_ROW*1];
+  float* train_arr = malloc(TRAIN_ROW*COL*sizeof(float));
+  float* train_y_arr = malloc(TRAIN_ROW*1*sizeof(float));
+  float* test_arr = malloc(TEST_ROW*COL*sizeof(float));
+  float* test_y_arr = malloc(TEST_ROW*1*sizeof(float));
 
+  int nproc, procID;
 
-  import_data(train_arr, train_y_arr, test_arr, test_y_arr);
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  MPI_Comm_rank(MPI_COMM_WORLD, &procID);
+  printf("number of processes %d\n", nproc);
+  printf("the rank %d\n", procID);
+
+  if(procID == 0){
+      import_data(train_arr, train_y_arr, test_arr, test_y_arr);
+  }
+  /*
+  else{
+      float* train_arr = malloc(TRAIN_ROW*COL*sizeof(float));
+      float* train_y_arr = malloc(TRAIN_ROW*1*sizeof(float));
+      float* test_arr = malloc(TEST_ROW*COL*sizeof(float));
+      float* test_y_arr = malloc(TEST_ROW*1*sizeof(float));
+  }*/
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  // distribute data
+  MPI_Bcast(train_arr, TRAIN_ROW*COL, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(train_y_arr, TRAIN_ROW*1, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
   // NEURAL NETWORK
-  // define weights and biases
   float weight_layer1[HIDDEN_NODES*INPUT_NODES];
-
   float weight_layer2[OUTPUT_NODES*HIDDEN_NODES];
 
   float input[COL];
@@ -178,14 +199,13 @@ void main(int argc, char *argv[]){
   float bias_layer1[HIDDEN_NODES];
   float bias_layer2[OUTPUT_NODES];
 
-  // define layers of the NN to store the values
   float layer1[HIDDEN_NODES];
   float layer2[OUTPUT_NODES];
 
   float d3[OUTPUT_NODES];
   float d2[HIDDEN_NODES];
 
-  // generate random weights and biases
+  // generate random weights
   for(int i = 0; i < HIDDEN_NODES; i++){
       for(int j = 0; j < INPUT_NODES; j++){
           weight_layer1[i*INPUT_NODES + j] = ((double)rand())/((double)RAND_MAX);
@@ -197,51 +217,111 @@ void main(int argc, char *argv[]){
       }
   }
 
-  clock_t t;
-  t = clock();
-  int p_epoch = 1000;
+  double elapsed_time;
+  elapsed_time = -MPI_Wtime();
+
+  int p_epoch = 2000;
   for(int epoch=0; epoch < p_epoch; epoch++){
     // iterate through input matrix row by row, extracting each row for training
-        for(int row = 0; row < TRAIN_ROW; row++){
-            for(int col = 0; col < COL; col++){
+        for(int row = 0; row < TRAIN_ROW/nproc; row++){
+            for(int col = 0; col < COL/nproc; col++){
                 input[col] = train_arr[row*COL + col];
             }
             forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
             backprop(input, train_y_arr[row], weight_layer1, weight_layer2, layer1, layer2, d2, d3);
         }
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        float* temp_weight1 = malloc(HIDDEN_NODES*INPUT_NODES*sizeof(float));
+        float* temp_weight2 = malloc(OUTPUT_NODES*HIDDEN_NODES*sizeof(float));
+
+        MPI_Allreduce(weight_layer1, temp_weight1, HIDDEN_NODES*INPUT_NODES, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(weight_layer2, temp_weight2, OUTPUT_NODES*HIDDEN_NODES, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+
+        // Average the paramters by the number of processes
+        for(int i=0; i < HIDDEN_NODES*INPUT_NODES; i++){
+            weight_layer1[i] = temp_weight1[i]/(float)nproc;
+        }
+        for(int i=0; i < OUTPUT_NODES*HIDDEN_NODES; i++){
+            weight_layer2[i] = temp_weight2[i]/(float)nproc;
+        }
+
+        free(temp_weight1);
+        free(temp_weight2);
   }
-  //float a = train_nn(train_arr, train_y_arr, weight_layer1, weight_layer2, layer1, layer2, epoch);
-  t = clock() - t;
-  double time_serial = ((double)t)/CLOCKS_PER_SEC;
-  printf("\nThe runtime for training a serial implementation of a NN, using %d epochs is: %fs\n", p_epoch, time_serial);
+  MPI_Finalize();
+  /*
+  */
+  elapsed_time += MPI_Wtime();
 
-  // predict
-  for(int row = 0; row < TRAIN_ROW; row++){
-      for(int col = 0; col < COL; col++){
-          input[col] = train_arr[row*COL + col];
+  int count1 = 0;
+  int count0 = 0;
+
+  if(procID == 0){
+    printf("Total elapsed time: %10.6f\n", elapsed_time);
+    //print weight matrix after training
+    for(int i=0; i < HIDDEN_NODES; i++){
+      for(int j=0; j < INPUT_NODES; j++){
+          printf("%f ", weight_layer1[i*INPUT_NODES +j]);
       }
-      forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
-      for(int i = 0; i < OUTPUT_NODES; i++){
-          if(layer2[i]>0.5){
-              output[row] = 1;
-          }
-          else{
-              output[row] = 0;
-          }
+      printf("\n");
+    }
+
+    for(int row = 0; row < TRAIN_ROW; row++){
+        for(int col = 0; col < COL; col++){
+            input[col] = train_arr[row*COL + col];
+            printf("%f ", input[col]);
+        }
+        printf("\n");
+
+        // FORWARD PROPAGATION:
+        for(int i = 0; i < HIDDEN_NODES; i++){
+            float act = 0.0;
+            for(int j = 0; j < INPUT_NODES; j++){
+                act += input[j]*weight_layer1[i * INPUT_NODES + j];
+            }
+            layer1[i] = sigmoid(act);
+        }
+        for(int i = 0; i < OUTPUT_NODES; i++){
+            float act = 0.0;
+            for(int j = 0; j < HIDDEN_NODES; j++){
+                act += layer1[j]*weight_layer2[i * HIDDEN_NODES + j];
+                printf("activation: %f\n", act);
+            }
+            layer2[i] = sigmoid(act);
+            printf("sigmoid: %f\n", layer2[i]);
+        }
+
+        //store predictions in an array
+        for(int i = 0; i < OUTPUT_NODES; i++){
+            if(layer2[i]>0.5){
+                output[row] = 1;
+                count1+=1;
+            }
+            else{
+                output[row] = 0;
+                count0+=1;
+            }
+
         }
     }
 
-    int count_final=0;
+      int count_final=0;
 
-    for(int i = 0; i < TRAIN_ROW; i++){
-        //printf("predicted %f\n", output[i]);
-        //printf("actual %f\n", train_y_arr[i]);
-        if(output[i] == train_y_arr[i]){
-            count_final +=1;
-        }
-    }
-
-    printf("%d\n", count_final);
-    free(output);
-    return;
+      for(int i = 0; i < TRAIN_ROW; i++){
+          //printf("predicted %f\n", output[i]);
+          //printf("actual %f\n", train_y_arr[i]);
+          if(output[i] == train_y_arr[i]){
+              count_final +=1;
+          }
+      }
+      printf("\n count0 %d count1 %d\n", count0, count1);
+      printf("%d\n", count_final);
+  }
+  free(output);
+  free(train_arr);
+  free(train_y_arr);
+  free(test_arr);
+  free(test_y_arr);
+  return;
 }

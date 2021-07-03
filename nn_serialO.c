@@ -159,10 +159,10 @@ void import_data(float* train_arr, float* train_y_arr, float* test_arr , float* 
 
 void main(int argc, char *argv[]){
 
-  float train_arr[TRAIN_ROW*COL];
-  float train_y_arr[TRAIN_ROW*1];
-  float test_arr[TEST_ROW*COL];
-  float test_y_arr[TEST_ROW*1];
+  float* train_arr = malloc(TRAIN_ROW*COL*sizeof(float));
+  float* train_y_arr = malloc(TRAIN_ROW*1*sizeof(float));
+  float* test_arr = malloc(TEST_ROW*COL*sizeof(float));
+  float* test_y_arr = malloc(TEST_ROW*1*sizeof(float));
 
 
   import_data(train_arr, train_y_arr, test_arr, test_y_arr);
@@ -215,6 +215,15 @@ void main(int argc, char *argv[]){
   double time_serial = ((double)t)/CLOCKS_PER_SEC;
   printf("\nThe runtime for training a serial implementation of a NN, using %d epochs is: %fs\n", p_epoch, time_serial);
 
+
+  //print weight matrix after training
+  for(int i=0; i < HIDDEN_NODES; i++){
+    for(int j=0; j < INPUT_NODES; j++){
+        printf("%f ", weight_layer1[i*INPUT_NODES +j]);
+    }
+    printf("\n");
+  }
+
   // predict
   for(int row = 0; row < TRAIN_ROW; row++){
       for(int col = 0; col < COL; col++){
@@ -234,8 +243,8 @@ void main(int argc, char *argv[]){
     int count_final=0;
 
     for(int i = 0; i < TRAIN_ROW; i++){
-        printf("predicted %f\n", output[i]);
-        printf("actual %f\n", train_y_arr[i]);
+        //printf("predicted %f\n", output[i]);
+        //printf("actual %f\n", train_y_arr[i]);
         if(output[i] == train_y_arr[i]){
             count_final +=1;
         }
