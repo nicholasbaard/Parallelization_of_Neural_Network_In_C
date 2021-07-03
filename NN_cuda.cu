@@ -411,7 +411,7 @@ int main(int argc, char *argv[]){
   float mse_total;
   float mse_old = 100000;
   float mse_difference = 100000;
-  float mse_abs = 100000;
+  float mse_abs = 10000;
   int max_epoch = 0;
   while(mse_abs > 0.0001 && max_epoch < epoch){ //
   //for (size_t i = 0; i < epoch; i++) {

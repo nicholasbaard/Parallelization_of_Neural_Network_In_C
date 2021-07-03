@@ -14,7 +14,7 @@
 #define HIDDEN_NODES 10
 #define OUTPUT_NODES 1
 
-#define ALPHA 0.05
+#define ALPHA 0.01
 
 // Activation Functions
 float sigmoid(float x){
@@ -25,7 +25,9 @@ void forward_prop(float *input,
                   float *weight1,
                   float *weight2,
                   float *layer1,
-                  float *layer2)
+                  float *layer2,
+                  float * bias1,
+                  float * bias2)
                   {
 
       // FORWARD PROPAGATION:
@@ -34,14 +36,14 @@ void forward_prop(float *input,
           for(int j = 0; j < INPUT_NODES; j++){
               act += input[j]*weight1[i*INPUT_NODES + j];
           }
-          layer1[i] = sigmoid(act);
+          layer1[i] = sigmoid(act+bias1[i]);
       }
       for(int i = 0; i < OUTPUT_NODES; i++){
           float act = 0.0;
           for(int j = 0; j < HIDDEN_NODES; j++){
               act += layer1[j]*weight2[i* HIDDEN_NODES + j];
           }
-          layer2[i] = sigmoid(act);
+          layer2[i] = sigmoid(act+bias2[i]);
       }
 }
 
@@ -188,6 +190,7 @@ void main(int argc, char *argv[]){
   MPI_Bcast(train_arr, TRAIN_ROW*COL, MPI_FLOAT, 0, MPI_COMM_WORLD);
   MPI_Bcast(train_y_arr, TRAIN_ROW*1, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+  srand (procID);
   // NEURAL NETWORK
   float weight_layer1[HIDDEN_NODES*INPUT_NODES];
   float weight_layer2[OUTPUT_NODES*HIDDEN_NODES];
@@ -216,28 +219,34 @@ void main(int argc, char *argv[]){
           weight_layer2[i*HIDDEN_NODES + j] = ((double)rand())/((double)RAND_MAX);
       }
   }
+  for(int i=0; i < HIDDEN_NODES; i++){
+    bias_layer1[i] = ((double)rand())/((double)RAND_MAX);
+  }
+  for(int i=0; i < OUTPUT_NODES; i++){
+    bias_layer2[i] = ((double)rand())/((double)RAND_MAX);
+  }
 
   double elapsed_time;
   elapsed_time = -MPI_Wtime();
   float mse = 0.0;
   float *mse_total = malloc(sizeof(float));
-  int p_epoch = 2000;
-  float beta=0.5;
+  int p_epoch = 50000;
+  int imageSample =0;
   for(int epoch=0; epoch < p_epoch; epoch++){
         mse = 0.0;
         mse_total = &mse;
 
         for(int row = 0; row < TRAIN_ROW/nproc; row++){
+            imageSample = rand() % TRAIN_ROW;
             for(int col = 0; col < COL/nproc; col++){
-                input[col] = train_arr[row*COL + col];
+                input[col] = train_arr[imageSample*COL + col];
             }
-            forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
-            backprop(input, train_y_arr[row], weight_layer1, weight_layer2, layer1, layer2, d2, d3);
-            *mse_total += d3[0]*d3[0];
+            forward_prop(input, weight_layer1, weight_layer2, layer1, layer2, bias_layer1, bias_layer2);
+            backprop(input, train_y_arr[imageSample], weight_layer1, weight_layer2, layer1, layer2, d2, d3);
+            *mse_total += 0.5*d3[0]*d3[0];
         }
         MPI_Barrier(MPI_COMM_WORLD);
-        printf("%f\n", mse-beta);
-        beta = beta/2;
+        //printf("%f\n", mse);
         float* temp_weight1 = malloc(HIDDEN_NODES*INPUT_NODES*sizeof(float));
         float* temp_weight2 = malloc(OUTPUT_NODES*HIDDEN_NODES*sizeof(float));
 
@@ -279,7 +288,7 @@ void main(int argc, char *argv[]){
         for(int col = 0; col < COL; col++){
             input[col] = train_arr[row*COL + col];
         }
-        forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
+        forward_prop(input, weight_layer1, weight_layer2, layer1, layer2, bias_layer1, bias_layer2);
 
         //store predictions in an array
         for(int i = 0; i < OUTPUT_NODES; i++){
@@ -308,7 +317,7 @@ void main(int argc, char *argv[]){
         for(int col = 0; col < COL; col++){
             input[col] = train_arr[row*COL + col];
         }
-        forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
+        forward_prop(input, weight_layer1, weight_layer2, layer1, layer2, bias_layer1, bias_layer2);
 
         //store predictions in an array
         for(int i = 0; i < OUTPUT_NODES; i++){

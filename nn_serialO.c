@@ -23,8 +23,10 @@ float sigmoid(float x){
 void forward_prop(float *input,
                   float *weight1,
                   float *weight2,
-                  float layer1[HIDDEN_NODES],
-                  float layer2[OUTPUT_NODES])
+                  float *layer1,
+                  float *layer2,
+                  float *bias1,
+                  float *bias2)
                   {
 
       // FORWARD PROPAGATION:
@@ -33,14 +35,14 @@ void forward_prop(float *input,
           for(int j = 0; j < INPUT_NODES; j++){
               act += input[j]*weight1[i*INPUT_NODES + j];
           }
-          layer1[i] = sigmoid(act);
+          layer1[i] = sigmoid(act + bias1[i]);
       }
       for(int i = 0; i < OUTPUT_NODES; i++){
           float act = 0.0;
           for(int j = 0; j < HIDDEN_NODES; j++){
               act += layer1[j]*weight2[i* HIDDEN_NODES + j];
           }
-          layer2[i] = sigmoid(act);
+          layer2[i] = sigmoid(act + bias2[i]);
       }
 }
 
@@ -48,10 +50,10 @@ void backprop(float *input,
               float label,
               float *weight1,
               float *weight2,
-              float layer1[HIDDEN_NODES],
-              float layer2[OUTPUT_NODES],
-              float d2[HIDDEN_NODES],
-              float d3[OUTPUT_NODES])
+              float *layer1,
+              float *layer2,
+              float *d2,
+              float *d3)
               {
 
       // BACKPROPAGATION:
@@ -196,20 +198,40 @@ void main(int argc, char *argv[]){
           weight_layer2[i*HIDDEN_NODES + j] = ((double)rand())/((double)RAND_MAX);
       }
   }
+  for(int i=0; i < HIDDEN_NODES; i++){
+    bias_layer1[i] = ((double)rand())/((double)RAND_MAX);
+  }
+  for(int i=0; i < OUTPUT_NODES; i++){
+    bias_layer2[i] = ((double)rand())/((double)RAND_MAX);
+  }
 
   clock_t t;
   t = clock();
-  int p_epoch = 1000000;
-  for(int epoch=0; epoch < p_epoch; epoch++){
+  int p_epoch = 100000;
+
+  float mse_total;
+  float mse_old = 100000;
+  float mse_difference = 100000;
+  float mse_abs = 10000;
+  int max_epoch = 0;
+
+  for(int epoch=0; epoch < 10000; epoch++){
     // iterate through input matrix row by row, extracting each row for training
+        mse_total = 0.0;
         for(int row = 0; row < TRAIN_ROW; row++){
             for(int col = 0; col < COL; col++){
                 input[col] = train_arr[row*COL + col];
             }
-            forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
+            forward_prop(input, weight_layer1, weight_layer2, layer1, layer2, bias_layer1, bias_layer2);
             backprop(input, train_y_arr[row], weight_layer1, weight_layer2, layer1, layer2, d2, d3);
+            mse_total += 0.5*d3[0]*d3[0];
         }
+        //printf("%f\n", mse_total);
+        mse_difference = mse_old - mse_total;
+        mse_abs = sqrt(mse_difference*mse_difference);
+        //printf("MSE ABS DIFFERENCE FOR EPOCH: %f\n", mse_abs);
   }
+
   //float a = train_nn(train_arr, train_y_arr, weight_layer1, weight_layer2, layer1, layer2, epoch);
   t = clock() - t;
   double time_serial = ((double)t)/CLOCKS_PER_SEC;
@@ -224,12 +246,12 @@ void main(int argc, char *argv[]){
     printf("\n");
   }
 
-  // predict
+  // predict on training dataset
   for(int row = 0; row < TRAIN_ROW; row++){
       for(int col = 0; col < COL; col++){
           input[col] = train_arr[row*COL + col];
       }
-      forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
+      forward_prop(input, weight_layer1, weight_layer2, layer1, layer2, bias_layer1, bias_layer2);
       for(int i = 0; i < OUTPUT_NODES; i++){
           if(layer2[i]>0.5){
               output[row] = 1;
@@ -250,7 +272,34 @@ void main(int argc, char *argv[]){
         }
     }
 
-    printf("%d\n", count_final);
+    float* output_test = malloc(TEST_ROW*sizeof(float));
+    for(int row = 0; row < TEST_ROW; row++){
+        for(int col = 0; col < COL; col++){
+            input[col] = test_arr[row*COL + col];
+        }
+        forward_prop(input, weight_layer1, weight_layer2, layer1, layer2, bias_layer1, bias_layer2);
+        for(int i = 0; i < OUTPUT_NODES; i++){
+            if(layer2[i]>0.5){
+                output_test[row] = 1;
+            }
+            else{
+                output_test[row] = 0;
+            }
+          }
+      }
+
+      int count_test=0;
+
+      for(int i = 0; i < TEST_ROW; i++){
+          //printf("predicted %f\n", output[i]);
+          //printf("actual %f\n", train_y_arr[i]);
+          if(output_test[i] == test_y_arr[i]){
+              count_test +=1;
+          }
+      }
+
+    printf("Final count on training dataset%d\n", count_final);
+    printf("Final count on testing dataset%d\n", count_test);
     free(output);
     return;
 }
