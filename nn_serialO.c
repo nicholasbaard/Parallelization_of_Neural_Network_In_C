@@ -199,7 +199,7 @@ void main(int argc, char *argv[]){
 
   clock_t t;
   t = clock();
-  int p_epoch = 1000;
+  int p_epoch = 1000000;
   for(int epoch=0; epoch < p_epoch; epoch++){
     // iterate through input matrix row by row, extracting each row for training
         for(int row = 0; row < TRAIN_ROW; row++){

@@ -24,8 +24,8 @@ float sigmoid(float x){
 void forward_prop(float *input,
                   float *weight1,
                   float *weight2,
-                  float layer1[HIDDEN_NODES],
-                  float layer2[OUTPUT_NODES])
+                  float *layer1,
+                  float *layer2)
                   {
 
       // FORWARD PROPAGATION:
@@ -49,10 +49,10 @@ void backprop(float *input,
               float label,
               float *weight1,
               float *weight2,
-              float layer1[HIDDEN_NODES],
-              float layer2[OUTPUT_NODES],
-              float d2[HIDDEN_NODES],
-              float d3[OUTPUT_NODES])
+              float *layer1,
+              float *layer2,
+              float *d2,
+              float *d3)
               {
 
       // BACKPROPAGATION:
@@ -176,13 +176,12 @@ void main(int argc, char *argv[]){
   if(procID == 0){
       import_data(train_arr, train_y_arr, test_arr, test_y_arr);
   }
-  /*
   else{
       float* train_arr = malloc(TRAIN_ROW*COL*sizeof(float));
       float* train_y_arr = malloc(TRAIN_ROW*1*sizeof(float));
       float* test_arr = malloc(TEST_ROW*COL*sizeof(float));
       float* test_y_arr = malloc(TEST_ROW*1*sizeof(float));
-  }*/
+  }
 
   MPI_Barrier(MPI_COMM_WORLD);
   // distribute data
@@ -195,6 +194,7 @@ void main(int argc, char *argv[]){
 
   float input[COL];
   float *output = (float *)malloc(sizeof(TRAIN_ROW*sizeof(float)));
+  float *output_test = malloc(sizeof(TEST_ROW*sizeof(float)));
 
   float bias_layer1[HIDDEN_NODES];
   float bias_layer2[OUTPUT_NODES];
@@ -219,24 +219,32 @@ void main(int argc, char *argv[]){
 
   double elapsed_time;
   elapsed_time = -MPI_Wtime();
-
+  float mse = 0.0;
+  float *mse_total = malloc(sizeof(float));
   int p_epoch = 2000;
+  float beta=0.5;
   for(int epoch=0; epoch < p_epoch; epoch++){
-    // iterate through input matrix row by row, extracting each row for training
+        mse = 0.0;
+        mse_total = &mse;
+
         for(int row = 0; row < TRAIN_ROW/nproc; row++){
             for(int col = 0; col < COL/nproc; col++){
                 input[col] = train_arr[row*COL + col];
             }
             forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
             backprop(input, train_y_arr[row], weight_layer1, weight_layer2, layer1, layer2, d2, d3);
+            *mse_total += d3[0]*d3[0];
         }
         MPI_Barrier(MPI_COMM_WORLD);
-
+        printf("%f\n", mse-beta);
+        beta = beta/2;
         float* temp_weight1 = malloc(HIDDEN_NODES*INPUT_NODES*sizeof(float));
         float* temp_weight2 = malloc(OUTPUT_NODES*HIDDEN_NODES*sizeof(float));
 
+
         MPI_Allreduce(weight_layer1, temp_weight1, HIDDEN_NODES*INPUT_NODES, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(weight_layer2, temp_weight2, OUTPUT_NODES*HIDDEN_NODES, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+
 
         // Average the paramters by the number of processes
         for(int i=0; i < HIDDEN_NODES*INPUT_NODES; i++){
@@ -249,9 +257,8 @@ void main(int argc, char *argv[]){
         free(temp_weight1);
         free(temp_weight2);
   }
+
   MPI_Finalize();
-  /*
-  */
   elapsed_time += MPI_Wtime();
 
   int count1 = 0;
@@ -267,30 +274,12 @@ void main(int argc, char *argv[]){
       printf("\n");
     }
 
+    //predict on training data set
     for(int row = 0; row < TRAIN_ROW; row++){
         for(int col = 0; col < COL; col++){
             input[col] = train_arr[row*COL + col];
-            printf("%f ", input[col]);
         }
-        printf("\n");
-
-        // FORWARD PROPAGATION:
-        for(int i = 0; i < HIDDEN_NODES; i++){
-            float act = 0.0;
-            for(int j = 0; j < INPUT_NODES; j++){
-                act += input[j]*weight_layer1[i * INPUT_NODES + j];
-            }
-            layer1[i] = sigmoid(act);
-        }
-        for(int i = 0; i < OUTPUT_NODES; i++){
-            float act = 0.0;
-            for(int j = 0; j < HIDDEN_NODES; j++){
-                act += layer1[j]*weight_layer2[i * HIDDEN_NODES + j];
-                printf("activation: %f\n", act);
-            }
-            layer2[i] = sigmoid(act);
-            printf("sigmoid: %f\n", layer2[i]);
-        }
+        forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
 
         //store predictions in an array
         for(int i = 0; i < OUTPUT_NODES; i++){
@@ -305,18 +294,45 @@ void main(int argc, char *argv[]){
 
         }
     }
+    int count_final=0;
 
-      int count_final=0;
+    for(int i = 0; i < TRAIN_ROW; i++){
+        //printf("predicted %f\n", output[i]);
+        //printf("actual %f\n", train_y_arr[i]);
+        if(output[i] == train_y_arr[i]){
+            count_final +=1;
+        }
+    }
 
-      for(int i = 0; i < TRAIN_ROW; i++){
-          //printf("predicted %f\n", output[i]);
-          //printf("actual %f\n", train_y_arr[i]);
-          if(output[i] == train_y_arr[i]){
-              count_final +=1;
-          }
-      }
-      printf("\n count0 %d count1 %d\n", count0, count1);
-      printf("%d\n", count_final);
+    for(int row = 0; row < TEST_ROW; row++){
+        for(int col = 0; col < COL; col++){
+            input[col] = train_arr[row*COL + col];
+        }
+        forward_prop(input, weight_layer1, weight_layer2, layer1, layer2);
+
+        //store predictions in an array
+        for(int i = 0; i < OUTPUT_NODES; i++){
+            if(layer2[i]>0.5){
+                output_test[row] = 1;
+            }
+            else{
+                output_test[row] = 0;
+            }
+
+        }
+    }
+    int count_test=0;
+
+    for(int i = 0; i < TEST_ROW; i++){
+        //printf("predicted %f\n", output[i]);
+        //printf("actual %f\n", train_y_arr[i]);
+        if(output_test[i] == test_y_arr[i]){
+            count_test +=1;
+        }
+    }
+
+    printf("Final Training dataset correct count %d\n", count_final);
+    printf("Final Testing dataset correct count %d\n", count_test);
   }
   free(output);
   free(train_arr);
